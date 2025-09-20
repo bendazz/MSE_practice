@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSE Practice – Horizontal Line y = b</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #f9fafb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #16a34a;
+      --warn: #b45309;
+      --error: #dc2626;
+      --grid: #e5e7eb;
+      --point: #2563eb;
+      --line: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: var(--bg);
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #e5e7eb;
+      background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
+    }
+    header h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    header p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 16px;
+      padding: 16px;
+    }
+    @media (max-width: 960px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    }
+
+  canvas { width: 100%; height: 60vh; display: block; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .controls label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row input[type="number"], .row input[type="text"] {
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      outline: none;
+      min-width: 140px;
+    }
+    .row input::placeholder { color: #6a7380; }
+
+    .btn {
+      background: #f3f4f6;
+      color: var(--text);
+      border: 1px solid #e5e7eb;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.02s ease, background 0.2s ease, border-color 0.2s ease;
+      font-weight: 600;
+    }
+    .btn:hover { background: #e5e7eb; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+    .btn.primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+    .btn.success { background: #16a34a; border-color: #16a34a; color: #ffffff; }
+    .btn.error { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+
+    .info { font-size: 14px; color: var(--muted); }
+    .emph { color: var(--text); }
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; }
+
+    .feedback { margin-top: 8px; min-height: 20px; }
+    .feedback.ok { color: var(--accent); }
+    .feedback.bad { color: var(--error); }
+
+    .footer-note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .soln { white-space: pre-wrap; background: #ffffff; color: var(--text); border-radius: 8px; padding: 10px; border: 1px solid #d1d5db; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mean Squared Error Practice</h1>
+    <p>Estimate the MSE of points relative to a horizontal line y = b. Enter your answer and check.</p>
+  </header>
+
+  <div class="wrap">
+    <section class="panel">
+      <canvas id="plot" width="900" height="540" aria-label="Plot of points and line y=b"></canvas>
+    </section>
+
+    <aside class="panel">
+      <div class="controls">
+        <div class="kv" style="margin-bottom:10px">
+          <div>Target line:</div>
+          <div class="emph">y = <span id="bVal">?</span></div>
+          <div>Points:</div>
+          <div id="ptsList" class="info">(x, y) tuples shown here</div>
+        </div>
+
+        <div class="row" style="margin-bottom:8px">
+          <button id="revealBtn" class="btn primary">Reveal Solution</button>
+          <button id="newBtn" class="btn">New Problem</button>
+        </div>
+
+        <div id="solution" class="soln" style="display:none; margin-top:10px"></div>
+
+        <div class="footer-note">Tip: MSE = average of squared vertical distances (y − b)^2.</div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    (function(){
+      'use strict';
+
+      // State
+      let current = { points: [], b: 0, mse: 0 };
+      const rng = mulberry32(Date.now() % 0xFFFFFFFF);
+
+      // Elements
+      const canvas = document.getElementById('plot');
+      const ctx = canvas.getContext('2d');
+      const bValEl = document.getElementById('bVal');
+      const ptsListEl = document.getElementById('ptsList');
+      const solutionEl = document.getElementById('solution');
+      document.getElementById('revealBtn').addEventListener('click', onReveal);
+      document.getElementById('newBtn').addEventListener('click', newProblem);
+
+  // Initialize
+  newProblem();
+  window.addEventListener('resize', () => draw(current));
+
+      // Random utilities
+      function mulberry32(a){
+        return function() {
+          a |= 0; a = a + 0x6D2B79F5 | 0;
+          let t = Math.imul(a ^ a >>> 15, 1 | a);
+          t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+      }
+  function randRange(lo, hi) { return lo + (hi - lo) * rng(); }
+  function randInt(lo, hi) { return Math.floor(randRange(lo, hi + 1)); }
+
+      function weightedCount(){
+        const r = rng();
+        if (r < 0.3) return 2; // 30%
+        if (r < 0.9) return 3; // 60%
+        return 4;             // 10%
+      }
+
+      function genPoints(n){
+        // Generate distinct-ish x values and y around a band.
+        const xs = [];
+        for (let i=0;i<n;i++) xs.push(randInt(-8, 8));
+        xs.sort((a,b)=>a-b);
+        const pts = xs.map(x => ({ x, y: randInt(-6, 6) }));
+        // Ensure not all y are equal to avoid trivial MSE=const when b equals them.
+        const allEqual = pts.every(p => p.y === pts[0].y);
+        if (allEqual) pts[Math.floor(rng()*n)].y += 1;
+        return pts;
+      }
+
+      function genProblem(){
+        const n = weightedCount();
+        const b = randInt(-6, 6);
+        const points = genPoints(n);
+        const mse = points.reduce((acc,p)=> acc + (p.y - b)*(p.y - b), 0) / n;
+        return { points, b, mse };
+      }
+
+      function newProblem(){
+        current = genProblem();
+        solutionEl.style.display = 'none';
+        bValEl.textContent = current.b.toString();
+        ptsListEl.textContent = current.points.map(p=>`(${p.x}, ${p.y})`).join(', ');
+        draw(current);
+      }
+
+      function onReveal(){
+        const steps = current.points.map(p => `(${p.x}, ${p.y}): (y - b)^2 = (${p.y} - ${current.b})^2 = ${(p.y - current.b) ** 2}`);
+        const body = [
+          `Line: y = ${current.b}`,
+          `Points: ${current.points.map(p=>`(${p.x}, ${p.y})`).join(', ')}`,
+          '',
+          'Squared errors:',
+          ...steps,
+          '',
+          `MSE = average = ${fmt(current.mse)}`
+        ].join('\n');
+        solutionEl.textContent = body;
+        solutionEl.style.display = 'block';
+      }
+
+      function fmt(x){
+        // Format to 6 decimals but trim trailing zeros
+        return Number(x.toFixed(6)).toString();
+      }
+
+      // Drawing
+      function draw(state){
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+        if (canvas.width !== Math.floor(cssW * dpr) || canvas.height !== Math.floor(cssH * dpr)) {
+          canvas.width = Math.floor(cssW * dpr);
+          canvas.height = Math.floor(cssH * dpr);
+        }
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, cssW, cssH);
+
+        // Determine bounds around points and b; add padding
+        const xs = state.points.map(p=>p.x);
+        const ys = state.points.map(p=>p.y).concat([state.b]);
+        let minX = Math.min(-10, ...xs) - 1, maxX = Math.max(10, ...xs) + 1;
+        let minY = Math.min(-8, ...ys) - 1, maxY = Math.max(8, ...ys) + 1;
+        const padding = 32;
+
+        // Map world -> screen
+        const W = cssW - 2*padding, H = cssH - 2*padding;
+        const sx = x => padding + (x - minX) * (W / (maxX - minX));
+        const sy = y => padding + H - (y - minY) * (H / (maxY - minY));
+
+        // Grid
+        drawGrid();
+        // Axes
+        drawAxes();
+        // Line y = b
+  ctx.strokeStyle = getCSS('--line');
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx(minX), sy(state.b));
+        ctx.lineTo(sx(maxX), sy(state.b));
+        ctx.stroke();
+
+        // Points
+        ctx.fillStyle = getCSS('--point');
+        for (const p of state.points) {
+          drawPoint(sx(p.x), sy(p.y));
+          // label each point with (x, y)
+          const label = `(${p.x}, ${p.y})`;
+          drawLabel(label, sx(p.x) + 8, sy(p.y) - 8, { align: 'left', valign: 'bottom' });
+        }
+
+        // Label the line y = b inside the plotting area, near right side
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+        const lineText = `y = ${state.b}`;
+        let lineY = sy(state.b) - 6; // prefer above the line
+        if (lineY < padding + 14) lineY = sy(state.b) + 6; // if too close to top, put below
+        drawLabel(lineText, padding + W - 8, lineY, { align: 'right', valign: 'bottom', bgAlpha: 0.9 });
+
+        ctx.restore();
+
+        function drawGrid(){
+          ctx.strokeStyle = getCSS('--grid');
+          ctx.lineWidth = 1;
+          const xStep = 1, yStep = 1;
+          // vertical lines
+          for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += xStep) {
+            const X = sx(x);
+            ctx.beginPath();
+            ctx.moveTo(X, padding);
+            ctx.lineTo(X, padding + H);
+            ctx.stroke();
+          }
+          // horizontal lines
+          for (let y = Math.ceil(minY); y <= Math.floor(maxY); y += yStep) {
+            const Y = sy(y);
+            ctx.beginPath();
+            ctx.moveTo(padding, Y);
+            ctx.lineTo(padding + W, Y);
+            ctx.stroke();
+          }
+        }
+
+        function drawAxes(){
+          ctx.strokeStyle = '#9ca3af';
+          ctx.lineWidth = 1.5;
+          // y=0
+          if (minY <= 0 && maxY >= 0){
+            ctx.beginPath();
+            ctx.moveTo(padding, sy(0));
+            ctx.lineTo(padding + W, sy(0));
+            ctx.stroke();
+          }
+          // x=0
+          if (minX <= 0 && maxX >= 0){
+            ctx.beginPath();
+            ctx.moveTo(sx(0), padding);
+            ctx.lineTo(sx(0), padding + H);
+            ctx.stroke();
+          }
+        }
+
+        function drawPoint(X, Y){
+          ctx.beginPath();
+          ctx.arc(X, Y, 4, 0, Math.PI*2);
+          ctx.fill();
+        }
+
+        function drawLabel(text, X, Y, opts={}){
+          const { align = 'left', valign = 'top', paddingPx = 3, bg = '#ffffff', bgAlpha = 0.85, border = '#d1d5db', textColor = '#111827' } = opts;
+          ctx.save();
+          ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+          const m = ctx.measureText(text);
+          const h = (m.actualBoundingBoxAscent || 9) + (m.actualBoundingBoxDescent || 3);
+          let w = m.width;
+          let x = X, y = Y;
+          // adjust based on alignment
+          if (align === 'center') x = X - w/2; else if (align === 'right') x = X - w;
+          if (valign === 'middle') y = Y - h/2; else if (valign === 'bottom') y = Y - h;
+          // clamp within canvas bounds
+          const minXPix = padding + 2, maxXPix = padding + W - 2;
+          const minYPix = padding + 2, maxYPix = padding + H - 2;
+          if (x < minXPix) x = minXPix;
+          if (x + w > maxXPix) x = maxXPix - w;
+          if (y < minYPix) y = minYPix;
+          if (y + h > maxYPix) y = maxYPix - h;
+          // background
+          ctx.fillStyle = applyAlpha(bg, bgAlpha);
+          ctx.fillRect(x - paddingPx, y - paddingPx, w + 2*paddingPx, h + 2*paddingPx);
+          ctx.strokeStyle = border;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x - paddingPx, y - paddingPx, w + 2*paddingPx, h + 2*paddingPx);
+          // text
+          ctx.fillStyle = textColor;
+          ctx.fillText(text, x, y + (m.actualBoundingBoxAscent || 9));
+          ctx.restore();
+        }
+
+        function applyAlpha(hex, alpha){
+          // convert #rrggbb to rgba
+          const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          if (!m) return hex;
+          const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+      }
+    })();
+  </script>
+</body>
+</html>
